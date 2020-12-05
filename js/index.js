@@ -13,9 +13,11 @@ const refs = {
     largeImage: document.querySelector('img.lightbox__image'),
     closeBtn: document.querySelector('button[data-action="close-lightbox"]'),
     largeImageBackground: document.querySelector('div.lightbox__overlay'),
+    largeImageIdx:'',
+    galleryItems:[],
 };
-
-const galleryItems = gallery.map(array => {
+let i = 0;
+refs.galleryItems = gallery.map(array => {
     const galleryItem = document.createElement('li');
     galleryItem.classList.add('gallery__item');
     const galleryItemLink = document.createElement('a');
@@ -23,14 +25,16 @@ const galleryItems = gallery.map(array => {
     galleryItemLink.href = array.original;
     const galleryItemImg = document.createElement('img');
     galleryItemImg.classList.add('gallery__image');
-    galleryItemImg.src= array.preview;
+    galleryItemImg.setAttribute('data-lazy', array.preview);
     galleryItemImg.setAttribute('data-source', array.original);
+    galleryItemImg.setAttribute('data-idx', i);
+    i+=1;
     galleryItemImg.setAttribute('atl', array.description);
     galleryItem.insertAdjacentElement('afterbegin', galleryItemLink);
     galleryItemLink.insertAdjacentElement('afterbegin', galleryItemImg);
     return galleryItem;
 });
-refs.galleryList.prepend(...galleryItems);
+refs.galleryList.prepend(...refs.galleryItems);
 
 // 2. Реализация делегирования на галерее ul.js-gallery и получение url большого изображения.
 const onGalleryClick = (event) => {
@@ -42,8 +46,8 @@ event.preventDefault();
     refs.largeImageOverlay.classList.toggle('is-open');
 
      // 4. Подмена значения атрибута src элемента img.lightbox__image.
-    const largeImageURL = event.target.dataset.source;
-    refs.largeImage.src = largeImageURL;
+    refs.largeImageIdx = event.target.dataset.idx;
+    refs.largeImage.src = event.target.dataset.source;
   };
 refs.galleryList.addEventListener('click', onGalleryClick);
 
@@ -52,8 +56,7 @@ const onCloseButtonClick = (event) => {
     refs.largeImageOverlay.classList.toggle('is-open');
     // 6. Очистка значения атрибута src элемента img.lightbox__image. Это необходимо для того, чтобы при следующем открытии модального окна, пока грузится изображение, мы не видели предыдущее.
     refs.largeImage.src = '';
-    event.stopPropagation();
-    return;
+    // return;
    };
 
 refs.closeBtn.addEventListener('click', onCloseButtonClick);
@@ -65,27 +68,73 @@ const onLargeImageOverlayClick = (event) => {
     onCloseButtonClick('click');
     };
 
-refs.largeImageOverlay.addEventListener('click', onLargeImageOverlayClick);
+refs.largeImageBackground.addEventListener('click', onLargeImageOverlayClick);
 
 
 // Закрытие модального окна по нажатию клавиши ESC.
+const onEscClick = (event) => (event.key === 'Escape') && onCloseButtonClick('click') ;
+window.addEventListener('keydown', onEscClick);
+
 // Пролистывание изображений галереи в открытом модальном окне клавишами "влево" и "вправо".
+const onArrowClick = (event) => {
+    switch (event.key) {
+        case 'ArrowLeft':
+        case 'Left':
+            if (refs.largeImageIdx > 0) {
+                const currentIdx = Number(refs.largeImageIdx);
+                const prevImg = refs.galleryItems[currentIdx - 1].querySelector('img');
+                refs.largeImage.src = prevImg.dataset.source;
+                refs.largeImageIdx = prevImg.dataset.idx;
+            }
+            // замыкание цикла прокрутки влево:
+            else { 
+                const lastIdx = refs.galleryItems.length - 1;
+                const prevImg = refs.galleryItems[lastIdx].querySelector('img');
+              refs.largeImage.src = prevImg.dataset.source;
+                refs.largeImageIdx = prevImg.dataset.idx;};
+               break;
+        case 'ArrowRight':
+            case 'Right':
+          if (refs.largeImageIdx < refs.galleryItems.length-1) {
+              const currentIdx = Number(refs.largeImageIdx);
+                const nextImg = refs.galleryItems[currentIdx + 1].querySelector('img');
+                refs.largeImage.src = nextImg.dataset.source;
+                refs.largeImageIdx = nextImg.dataset.idx;
+            }
+            // замыкание цикла прокрутки вправо:
+            else { 
+                const nextIdx = 0;
+                const nextImg = refs.galleryItems[nextIdx].querySelector('img');
+              refs.largeImage.src = nextImg.dataset.source;
+                refs.largeImageIdx = nextImg.dataset.idx;};
+               break;
+            default:
+            return;
+   };
+};
 
-// Доп: Ленивая загрузка
-// const options ={
-//   rootMargins: '20px',
-// };
-// const io = new IntersectionObserver((entries, observer) => {
-//   entries.forEach(entry => {
-//     if (entry.isIntersecting) {
-//       entry.target
-//       observer.disconnect();
-//     };
-//    });
-// }, options);
-// io.observe(galleryItem);
+window.addEventListener('keydown', onArrowClick);
 
+// Ленивая загрузка
 
-// 
+const images = document.querySelectorAll('.js-gallery img');
+const options = {
+  rootMargin: '100px',
+};
+
+const onEntry = ((entries, observer) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+        const image = entry.target;
+        const src = image.dataset.lazy;
+        image.src = src;
+        observer.unobserve(image);
+    };
+   });
+});
+
+const io = new IntersectionObserver(onEntry, options);
+images.forEach(image=>io.observe(image));
+
 
 
